@@ -1,122 +1,98 @@
 package tests;
 
+import models.*;
 import org.junit.jupiter.api.Test;
 
+import static specs.RegisterSpecs.registerRequestSpecs;
+import static specs.RegisterSpecs.registerResponseSpecs;
+import static specs.UsersSpecs.userRequestSpecs;
+import static specs.UsersSpecs.userResponseSpecs;
+import static io.qameta.allure.Allure.step;
 import static io.restassured.RestAssured.given;
-import static io.restassured.http.ContentType.JSON;
-import static org.hamcrest.Matchers.is;
-
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ApiTests extends BaseTest {
-    @Test
-    public void singleUserTest200() {
-        given()
-                .log().uri()
-                .log().method()
-                .when()
-                .get("/users/2")
-                .then()
-                .log().status()
-                .log().body()
-                .statusCode(200)
-                .body("data.first_name", is("Janet"));
-    }
-
 
     @Test
-    public void registerSuccessfulTest200() {
-        String authBody = "{\"email\": \"eve.holt@reqres.in\", \"password\": \"pistol\"}";
+    void checkSupportTextInListUsersTest() {
+        UserListResponse response = step("Make request for list of user", () ->
+                given(userRequestSpecs)
+                        .when()
+                        .get("users?page=2")
+                        .then()
+                        .spec(userResponseSpecs)
+                        .extract().as(UserListResponse.class));
 
-        given()
-                .log().uri()
-                .log().method()
-                .body(authBody)
-
-                .when()
-                .contentType(JSON)
-                .post("/register")
-
-                .then()
-                .log().status()
-                .log().body()
-                .statusCode(200)
-                .body("id", is(4))
-                .body("token", is("QpwL5tke4Pnpja7X4"));
+        step("Verify text in support", () ->
+                assertEquals("To keep ReqRes free, contributions towards server costs are appreciated!",
+                        response.getSupport().getText()));
     }
 
     @Test
-    public void registerUnsuccessfulTest400() {
-        String authBody = "{\"email\": \"sydney@fife\"}";
-
-        given()
-                .log().uri()
-                .log().method()
-                .body(authBody)
-                .when()
-                .contentType(JSON)
-                .post("/register")
-                .then()
-                .log().status()
-                .log().body()
-                .statusCode(400) //
-                .body("error", is("Missing password"));
-    }
-
-
-    @Test
-    public void loginSuccessfulTest200() {
-        String authBody = "{\"email\": \"eve.holt@reqres.in\", \"password\": \"cityslicka\"}";
-
-        given()
-                .log().uri()
-                .log().method()
-                .body(authBody)
-                .when()
-                .contentType(JSON)
-                .post("/login")
-                .then()
-                .log().status()
-                .log().body()
-                .statusCode(200) //
-                .body("token", is("QpwL5tke4Pnpja7X4"));
+    void checkSingleSourceNotFoundTest() {
+        step("Make request for not found", () ->
+                given(userRequestSpecs)
+                        .when()
+                        .get("/users/23")
+                        .then()
+                        .spec(userResponseSpecs)
+                        .statusCode(404));
     }
 
     @Test
-    public void loginUnsuccessfulTest400() {
-        String authBody = "{\"email\": \"peter@klaven\"}";
+    void checkSuccessfulRegisterTest() {
+        RegisterRequestModel regBody = new RegisterRequestModel();
+        regBody.setEmail("eve.holt@reqres.in");
+        regBody.setPassword("pistol");
 
-        given()
-                .log().uri()
-                .log().method()
-                .body(authBody)
-                .when()
-                .contentType(JSON)
-                .post("/login")
-                .then()
-                .log().status()
-                .log().body()
-                .statusCode(400) //
-                .body("error", is("Missing password"));
+        RegisterResponseModel response = step("Make register request", () ->
+                given(registerRequestSpecs)
+                        .body(regBody)
+                        .when()
+                        .post("/register")
+                        .then()
+                        .spec(registerResponseSpecs)
+                        .extract().as(RegisterResponseModel.class));
+
+        step("Verify Response", () ->
+                assertAll(
+                        () -> assertEquals("4", response.getId()),
+                        () -> assertEquals("QpwL5tke4Pnpja7X4", response.getToken())
+                ));
     }
 
     @Test
-    public void createUserTest201() {
-        String authBody = "{\"name\": \"morpheus\", \"job\": \"leader\"}";
+    void checkSuccessfulUpdateTest() {
+        UserRequestModel userBody = new UserRequestModel();
+        userBody.setName("morpheus");
+        userBody.setJob("zion resident");
 
-        given()
-                .log().uri()
-                .log().method()
-                .body(authBody)
-                .when()
-                .contentType(JSON)
-                .post("/users")
-                .then()
-                .log().status()
-                .log().body()
-                .statusCode(201) //
-                .body("name", is("morpheus"))
-                .body("job", is("leader"));
+        UserResponseModel response = step("Make update request", () ->
+                given(userRequestSpecs)
+                        .body(userBody)
+                        .when()
+                        .put("/users/2")
+                        .then()
+                        .spec(userResponseSpecs)
+                        .extract().as(UserResponseModel.class));
+
+        step("Verify changes", () ->
+                assertAll(
+                        () -> assertEquals("morpheus", response.getName()),
+                        () -> assertEquals("zion resident", response.getJob())
+                ));
+    }
+
+    @Test
+    void checkSuccessfulDelete() {
+        step("Make delete request", () ->
+                given(userRequestSpecs)
+                        .when()
+                        .delete("/users/2")
+                        .then()
+                        .spec(userResponseSpecs)
+                        .statusCode(204));
     }
 }
-
 
